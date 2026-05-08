@@ -1,0 +1,14 @@
+﻿{
+  "users": [
+    {
+      "username": "admin",
+      "password_hash": "2f55f5ac5a8371b302209ef52214997a0c0e97cb0329c92e08c774240abdf8c8",
+      "plan_name": "starter",
+      "seats": 1,
+      "expires_at": null,
+      "status": "active",
+      "notes": "초기 예시 계정 / 비밀번호는 change-this-password"
+    }
+  ],
+  "tokens": {}
+}
