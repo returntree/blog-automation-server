@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: blog-automation-v9-api
+    runtime: python
+    rootDir: .
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: SERVER_HOST
+        value: 0.0.0.0
+      - key: DATA_DIR
+        value: /var/data/blog_automation
+      - key: ALLOW_ORIGINS
+        value: "*"
+      - key: DEFAULT_PLAN
+        value: starter
+      - key: API_AUTH_TOKEN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: BILLING_WEBHOOK_TOKEN
+        sync: false
+      - key: DEMO_USERNAME
+        sync: false
+      - key: DEMO_PASSWORD
+        sync: false
+      - key: PLAN_LIMITS_JSON
+        sync: false
+    disk:
+      name: blog-automation-v9-data
+      mountPath: /var/data
+      sizeGB: 5
