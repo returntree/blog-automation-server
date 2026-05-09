@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
+ROOT_DIR = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = ROOT_DIR / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
@@ -107,5 +107,6 @@ def generate_image(prompt: str, model: str, quality: str, reference_image_path: 
             quality,
         )
     return generate_package_images.request_image_base64(prompt, model, quality)
+
 
 
