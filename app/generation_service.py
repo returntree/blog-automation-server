@@ -11,8 +11,8 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 import collect_blog_research
 import generate_blog_draft
-import generate_draft_from_images
-import generate_draft_from_manual
+import generate_draft_from_images as generate_draft_from_images_module
+import generate_draft_from_manual as generate_draft_from_manual_module
 import generate_package_images
 import generate_title_options
 import revise_blog_draft
@@ -54,7 +54,7 @@ def generate_draft(
 
 
 def generate_draft_from_manual(request: dict[str, Any], prompt: str) -> dict[str, Any]:
-    result = generate_draft_from_manual.request_result(request, prompt)
+    result = generate_draft_from_manual_module.request_result(request, prompt)
     return _ensure_dict(result, "수동 원고 기반 초안 결과를 JSON 객체로 받지 못했습니다.")
 
 
@@ -64,12 +64,12 @@ def generate_draft_from_images(
     image_paths: list[str],
     prompt: str,
 ) -> dict[str, Any]:
-    result = generate_draft_from_images.request_result(request, research, image_paths, prompt)
+    result = generate_draft_from_images_module.request_result(request, research, image_paths, prompt)
     normalized = _ensure_dict(result, "이미지 기반 초안 결과를 JSON 객체로 받지 못했습니다.")
 
     if not normalized.get("image_slots"):
         try:
-            assignments = generate_draft_from_images.assign_images_to_paragraphs(normalized, image_paths)
+            assignments = generate_draft_from_images_module.assign_images_to_paragraphs(normalized, image_paths)
         except Exception:
             assignments = []
         if assignments:
@@ -107,3 +107,5 @@ def generate_image(prompt: str, model: str, quality: str, reference_image_path: 
             quality,
         )
     return generate_package_images.request_image_base64(prompt, model, quality)
+
+
