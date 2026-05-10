@@ -26,7 +26,17 @@ python check_server_readiness.py
 
 오류가 0건이면 배포 가능한 상태입니다. 주의 항목은 운영 정책에 따라 확인하면 됩니다.
 
-## 3. Render 배포 후 점검
+## 3. Render 환경변수 원격 점검
+
+배포가 끝난 뒤 관리자 토큰으로 서버 환경변수가 제대로 들어갔는지 확인합니다. 이 명령은 비밀키 값을 출력하지 않고 설정 여부만 표시합니다.
+
+```powershell
+python scripts/server_config_status.py --server-base-url https://blog-automation-server-yytc.onrender.com --token "Render에 넣은 API_AUTH_TOKEN"
+```
+
+OPENAI_API_KEY, API_AUTH_TOKEN, DATA_DIR 쓰기 가능 여부가 모두 확인되어야 실제 생성 API가 안정적으로 동작합니다.
+
+## 4. Render 배포 후 기본 API 점검
 
 ```powershell
 python scripts/server_smoke_test.py --server-base-url https://blog-automation-server-yytc.onrender.com
@@ -38,7 +48,7 @@ python scripts/server_smoke_test.py --server-base-url https://blog-automation-se
 python scripts/server_smoke_test.py --server-base-url https://blog-automation-server-yytc.onrender.com --username 계정아이디 --password 계정비밀번호
 ```
 
-## 4. 클라이언트 연결 확인
+## 5. 클라이언트 연결 확인
 
 클라이언트 PC에서는 아래 순서로 확인합니다.
 
@@ -47,9 +57,10 @@ python scripts/client_login.py --server-base-url https://blog-automation-server-
 python scripts/client_status.py
 ```
 
-## 5. 자주 나는 문제
+## 6. 자주 나는 문제
 
 - Render 배포 실패: Logs에서 `ModuleNotFoundError`가 보이면 누락된 scripts 파일이 서버 repo에 포함됐는지 확인합니다.
 - OpenAI 생성 실패: OPENAI_API_KEY가 비었거나 크레딧이 부족한 경우입니다.
 - 로그인 실패: DEMO 계정은 최초 생성 시점의 값이 저장됩니다. 이미 계정 파일이 있으면 관리자 스크립트로 비밀번호를 재설정해야 합니다.
 - 사용량 제한 실패: PLAN_LIMITS_JSON 형식이 JSON 객체인지 확인합니다.
+

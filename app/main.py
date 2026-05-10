@@ -67,6 +67,16 @@ LIMIT_LABELS = {
 
 ACTIVE_ACCOUNT_STATUSES = {"active", "trialing", "paid", "ok"}
 
+def _check_data_dir_writable(data_dir) -> bool:
+    try:
+        data_dir.mkdir(parents=True, exist_ok=True)
+        probe_path = data_dir / ".blog_automation_write_probe"
+        probe_path.write_text("ok", encoding="utf-8")
+        probe_path.unlink(missing_ok=True)
+        return True
+    except Exception:
+        return False
+
 
 def require_authorized_user(request: Request, settings: ServerSettings = Depends(get_server_settings)) -> dict:
     return verify_token(request, _store, settings.api_auth_token)
@@ -189,6 +199,33 @@ def plans(settings: ServerSettings = Depends(get_server_settings)) -> PlanListRe
         for plan_name, limits in sorted(settings.plan_limits.items(), key=lambda item: item[0])
     ]
     return PlanListResponse(plans=plans)
+
+
+@app.get("/admin/config/status")
+def admin_config_status(
+    _admin: str = Depends(require_admin_request),
+    settings: ServerSettings = Depends(get_server_settings),
+) -> dict:
+    data_dir = settings.data_dir
+    return {
+        "ok": True,
+        "environment": settings.environment,
+        "app_base_url_configured": bool(settings.app_base_url),
+        "app_base_url": settings.app_base_url,
+        "data_dir": str(data_dir),
+        "data_dir_exists": data_dir.exists(),
+        "data_dir_writable": _check_data_dir_writable(data_dir),
+        "openai_api_key_configured": bool(settings.openai_api_key),
+        "api_auth_token_configured": bool(settings.api_auth_token),
+        "billing_webhook_token_configured": bool(settings.billing_webhook_token),
+        "demo_username_configured": bool(settings.demo_username),
+        "demo_password_configured": bool(settings.demo_password),
+        "demo_password_uses_default": settings.demo_password == "change-this-password",
+        "default_plan": settings.default_plan,
+        "plan_count": len(settings.plan_limits),
+        "plan_limits": settings.plan_limits,
+        "allow_origins": settings.allow_origins,
+    }
 
 
 @app.post("/auth/login", response_model=LoginResponse)
@@ -747,4 +784,5 @@ def images_generate(payload: ImageGenerateRequest, user: dict = Depends(require_
     )
     _record_server_usage(user["username"], "image_generated", "image_generation")
     return ImageGenerateResponse(image_base64=image_base64)
+
 
