@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import os
@@ -77,11 +77,16 @@ def main() -> int:
     elif not openai_key.startswith("sk-"):
         warnings.append("OPENAI_API_KEY 형식이 일반적인 OpenAI 키와 달라 보입니다. 값이 맞는지 확인하세요.")
 
+    admin_api_token = env_value(env_values, "ADMIN_API_TOKEN")
     api_auth_token = env_value(env_values, "API_AUTH_TOKEN")
-    if not api_auth_token:
-        warnings.append("API_AUTH_TOKEN이 비어 있습니다. 관리자 API 보호를 위해 설정하세요.")
-    elif api_auth_token == "change-this-admin-token":
-        errors.append("API_AUTH_TOKEN이 예시 기본값입니다. 실제 배포 전 반드시 변경하세요.")
+    if not admin_api_token and not api_auth_token:
+        errors.append("ADMIN_API_TOKEN 또는 API_AUTH_TOKEN 중 하나는 설정해야 합니다. 운영 배포에서는 ADMIN_API_TOKEN을 권장합니다.")
+    elif not admin_api_token and api_auth_token:
+        warnings.append("ADMIN_API_TOKEN이 비어 있어 API_AUTH_TOKEN을 관리자 토큰으로 대체 사용합니다. 운영 배포에서는 두 값을 분리하세요.")
+    elif admin_api_token == "change-this-admin-token":
+        errors.append("ADMIN_API_TOKEN이 예시 기본값입니다. 실제 배포 전 반드시 변경하세요.")
+    if api_auth_token and api_auth_token.startswith("change-this"):
+        warnings.append("API_AUTH_TOKEN이 예시 기본값입니다. 클라이언트/레거시 보호 토큰으로 쓸 경우 변경하세요.")
 
     demo_password = env_value(env_values, "DEMO_PASSWORD")
     if demo_password == "change-this-password":

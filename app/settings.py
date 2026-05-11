@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 import json
@@ -21,6 +21,7 @@ class ServerSettings:
     server_port: int
     app_base_url: str
     data_dir: Path
+    admin_api_token: str
     api_auth_token: str
     openai_api_key: str
     billing_webhook_token: str
@@ -95,6 +96,7 @@ def load_server_settings() -> ServerSettings:
         server_port=int(server_port_raw),
         app_base_url=os.getenv("APP_BASE_URL", "").strip(),
         data_dir=data_dir,
+        admin_api_token=os.getenv("ADMIN_API_TOKEN", "").strip(),
         api_auth_token=os.getenv("API_AUTH_TOKEN", "").strip(),
         openai_api_key=os.getenv("OPENAI_API_KEY", "").strip(),
         billing_webhook_token=os.getenv("BILLING_WEBHOOK_TOKEN", "").strip(),
@@ -108,3 +110,4 @@ def load_server_settings() -> ServerSettings:
 
 def get_server_settings() -> ServerSettings:
     return load_server_settings()
+

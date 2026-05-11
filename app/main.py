@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import datetime, timezone
 
@@ -82,8 +82,12 @@ def require_authorized_user(request: Request, settings: ServerSettings = Depends
     return verify_token(request, _store, settings.api_auth_token)
 
 
+def _admin_token(settings: ServerSettings) -> str:
+    return settings.admin_api_token or settings.api_auth_token
+
+
 def require_admin_request(request: Request, settings: ServerSettings = Depends(get_server_settings)) -> str:
-    return require_admin_token(request, settings.api_auth_token)
+    return require_admin_token(request, _admin_token(settings))
 
 
 def require_billing_webhook(request: Request, settings: ServerSettings = Depends(get_server_settings)) -> str:
@@ -217,6 +221,8 @@ def admin_config_status(
         "data_dir_writable": _check_data_dir_writable(data_dir),
         "openai_api_key_configured": bool(settings.openai_api_key),
         "api_auth_token_configured": bool(settings.api_auth_token),
+        "admin_api_token_configured": bool(_admin_token(settings)),
+        "admin_api_token_uses_api_auth_fallback": bool(not settings.admin_api_token and settings.api_auth_token),
         "billing_webhook_token_configured": bool(settings.billing_webhook_token),
         "demo_username_configured": bool(settings.demo_username),
         "demo_password_configured": bool(settings.demo_password),
@@ -277,7 +283,8 @@ def subscription_me(
 @app.post("/auth/logout", response_model=LogoutResponse)
 def auth_logout(request: Request, settings: ServerSettings = Depends(get_server_settings)) -> LogoutResponse:
     token = get_bearer_token(request)
-    if settings.api_auth_token and token == settings.api_auth_token:
+    admin_tokens = {value for value in (settings.admin_api_token, settings.api_auth_token) if value}
+    if token in admin_tokens:
         return LogoutResponse(message="관리자 토큰은 서버에서 별도로 관리됩니다.")
 
     _store.revoke_access_token(token)
@@ -784,5 +791,6 @@ def images_generate(payload: ImageGenerateRequest, user: dict = Depends(require_
     )
     _record_server_usage(user["username"], "image_generated", "image_generation")
     return ImageGenerateResponse(image_base64=image_base64)
+
 
 

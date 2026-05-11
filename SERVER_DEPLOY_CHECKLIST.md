@@ -1,4 +1,4 @@
-﻿# blog_automation 서버 배포 체크리스트
+# blog_automation 서버 배포 체크리스트
 
 이 폴더는 v9 클라이언트가 호출할 서버 API 배포용입니다. Render에 올린 뒤 아래 순서대로 확인하면 됩니다.
 
@@ -64,3 +64,8 @@ python scripts/client_status.py
 - 로그인 실패: DEMO 계정은 최초 생성 시점의 값이 저장됩니다. 이미 계정 파일이 있으면 관리자 스크립트로 비밀번호를 재설정해야 합니다.
 - 사용량 제한 실패: PLAN_LIMITS_JSON 형식이 JSON 객체인지 확인합니다.
 
+
+## 관리자 토큰 설정
+- `ADMIN_API_TOKEN`: 관리자 전용 API 호출에 사용하는 토큰입니다. Render Environment에 반드시 별도 값으로 등록하세요.
+- `API_AUTH_TOKEN`: 기존 클라이언트/레거시 보호 토큰입니다. `ADMIN_API_TOKEN`이 없으면 임시 fallback으로 사용되지만 운영에서는 분리 권장입니다.
+- 관리자 도구는 `BLOG_AUTOMATION_SERVER_URL`, `BLOG_AUTOMATION_ADMIN_TOKEN` 환경변수를 사용합니다.
