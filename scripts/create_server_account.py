@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import os
@@ -13,67 +13,65 @@ if str(ROOT_DIR) not in sys.path:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="blog_automation 서버 계정을 생성하거나 갱신합니다."
+        description="Create or update a blog_automation server account."
     )
-    parser.add_argument("--username", required=True, help="계정 아이디")
-    parser.add_argument("--password", required=True, help="계정 비밀번호")
-    parser.add_argument("--plan", default="starter", help="플랜 이름")
-    parser.add_argument("--seats", type=int, default=1, help="사용 좌석 수")
-    parser.add_argument("--expires-at", default=None, help="만료일 예: 2026-12-31")
-    parser.add_argument("--status", default="active", help="계정 상태")
-    parser.add_argument("--notes", default="", help="메모")
+    parser.add_argument("--username", required=True, help="Login username")
+    parser.add_argument("--password", required=True, help="Login password")
+    parser.add_argument("--plan", default="starter", help="Plan name")
+    parser.add_argument("--seats", type=int, default=1, help="Seat count")
+    parser.add_argument("--expires-at", default=None, help="Expiration date, e.g. 2026-12-31")
+    parser.add_argument("--status", default="active", help="Account status")
+    parser.add_argument("--notes", default="", help="Admin notes")
     parser.add_argument(
         "--server-base-url",
         default=os.environ.get("BLOG_AUTOMATION_SERVER_URL", ""),
-        help="서버 API 주소",
+        help="Server API base URL",
     )
     parser.add_argument(
         "--admin-token",
         default=os.environ.get("BLOG_AUTOMATION_ADMIN_TOKEN", ""),
-        help="관리자 토큰",
+        help="Admin API token",
     )
     return parser.parse_args()
 
 
 def print_account(account: dict) -> None:
-    print("계정 저장 완료")
-    print(f"계정: {account['username']}")
-    print(f"플랜: {account.get('plan_name') or ''}")
-    print(f"좌석 수: {account.get('seats') or 0}")
-    print(f"만료일: {account.get('expires_at') or ''}")
-    print(f"상태: {account.get('status') or ''}")
+    print("Account saved")
+    print(f"username: {account.get('username', '')}")
+    print(f"plan_name: {account.get('plan_name', '')}")
+    print(f"seats: {account.get('seats', 0)}")
+    print(f"expires_at: {account.get('expires_at') or ''}")
+    print(f"status: {account.get('status', '')}")
 
 
-def main() -> int:
-    args = parse_args()
+def save_remote(args: argparse.Namespace) -> int:
+    from client_api import ClientApiError, call_server_json_with_token  # noqa: E402
 
-    if args.server_base_url and args.admin_token:
-        from client_api import ClientApiError, call_server_json_with_token  # noqa: E402
+    try:
+        response = call_server_json_with_token(
+            args.server_base_url,
+            args.admin_token,
+            "/admin/accounts",
+            payload={
+                "username": args.username,
+                "password": args.password,
+                "plan_name": args.plan,
+                "seats": args.seats,
+                "expires_at": args.expires_at,
+                "status": args.status,
+                "notes": args.notes,
+            },
+            method="POST",
+        )
+    except ClientApiError as exc:
+        print(f"Remote account save failed: {exc}", file=sys.stderr)
+        return 1
+    print_account(response.get("account", response))
+    return 0
 
-        try:
-            response = call_server_json_with_token(
-                args.server_base_url,
-                args.admin_token,
-                "/admin/accounts",
-                payload={
-                    "username": args.username,
-                    "password": args.password,
-                    "plan_name": args.plan,
-                    "seats": args.seats,
-                    "expires_at": args.expires_at,
-                    "status": args.status,
-                    "notes": args.notes,
-                },
-                method="POST",
-            )
-        except ClientApiError as exc:
-            print(f"서버 계정 저장 실패: {exc}", file=sys.stderr)
-            return 1
-        print_account(response["account"])
-        return 0
 
+def save_local(args: argparse.Namespace) -> int:
     from app.account_store import AccountStore  # noqa: E402
-    from app.auth import revoke_user_tokens  # noqa: E402
 
     store = AccountStore()
     account = store.upsert_account(
@@ -85,9 +83,16 @@ def main() -> int:
         status=args.status,
         notes=args.notes,
     )
-    revoke_user_tokens(args.username)
+    store.revoke_tokens_for_username(args.username)
     print_account(account)
     return 0
+
+
+def main() -> int:
+    args = parse_args()
+    if args.server_base_url and args.admin_token:
+        return save_remote(args)
+    return save_local(args)
 
 
 if __name__ == "__main__":

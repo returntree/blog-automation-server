@@ -1,11 +1,15 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ModuleNotFoundError:
+    def load_dotenv(*args, **kwargs):
+        return False
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
