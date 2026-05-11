@@ -5,14 +5,10 @@ import os
 from pathlib import Path
 import sys
 
-ROOT_DIR = Path(__file__).resolve().parents[1]
-SERVER_DIR = ROOT_DIR / "server"
-if str(SERVER_DIR) not in sys.path:
-    sys.path.insert(0, str(SERVER_DIR))
 
-from app.account_store import AccountStore  # noqa: E402
-from app.auth import revoke_user_tokens  # noqa: E402
-from client_api import ClientApiError, call_server_json_with_token  # noqa: E402
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 
 def parse_args() -> argparse.Namespace:
@@ -52,23 +48,32 @@ def main() -> int:
     args = parse_args()
 
     if args.server_base_url and args.admin_token:
-        response = call_server_json_with_token(
-            args.server_base_url,
-            args.admin_token,
-            "/admin/accounts",
-            payload={
-                "username": args.username,
-                "password": args.password,
-                "plan_name": args.plan,
-                "seats": args.seats,
-                "expires_at": args.expires_at,
-                "status": args.status,
-                "notes": args.notes,
-            },
-            method="POST",
-        )
+        from client_api import ClientApiError, call_server_json_with_token  # noqa: E402
+
+        try:
+            response = call_server_json_with_token(
+                args.server_base_url,
+                args.admin_token,
+                "/admin/accounts",
+                payload={
+                    "username": args.username,
+                    "password": args.password,
+                    "plan_name": args.plan,
+                    "seats": args.seats,
+                    "expires_at": args.expires_at,
+                    "status": args.status,
+                    "notes": args.notes,
+                },
+                method="POST",
+            )
+        except ClientApiError as exc:
+            print(f"서버 계정 저장 실패: {exc}", file=sys.stderr)
+            return 1
         print_account(response["account"])
         return 0
+
+    from app.account_store import AccountStore  # noqa: E402
+    from app.auth import revoke_user_tokens  # noqa: E402
 
     store = AccountStore()
     account = store.upsert_account(
@@ -86,8 +91,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except ClientApiError as exc:
-        print(f"서버 계정 저장 실패: {exc}", file=sys.stderr)
-        raise
+    raise SystemExit(main())
