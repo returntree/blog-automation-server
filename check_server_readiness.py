@@ -80,7 +80,7 @@ def main() -> int:
     admin_api_token = env_value(env_values, "ADMIN_API_TOKEN")
     api_auth_token = env_value(env_values, "API_AUTH_TOKEN")
     if not admin_api_token and not api_auth_token:
-        errors.append("ADMIN_API_TOKEN 또는 API_AUTH_TOKEN 중 하나는 설정해야 합니다. 운영 배포에서는 ADMIN_API_TOKEN을 권장합니다.")
+        warnings.append("로컬에는 ADMIN_API_TOKEN/API_AUTH_TOKEN이 없습니다. Render Environment에는 ADMIN_API_TOKEN을 반드시 설정하세요.")
     elif not admin_api_token and api_auth_token:
         warnings.append("ADMIN_API_TOKEN이 비어 있어 API_AUTH_TOKEN을 관리자 토큰으로 대체 사용합니다. 운영 배포에서는 두 값을 분리하세요.")
     elif admin_api_token == "change-this-admin-token":
