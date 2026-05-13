@@ -1,6 +1,8 @@
 ﻿from __future__ import annotations
 
 import sys
+import base64
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -141,14 +143,43 @@ def revise_draft(action: str | dict[str, Any], current_result: dict[str, Any], i
     raise ValueError(f"AI 수정 본문 길이가 기준을 벗어났습니다: {body_length}자")
 
 
-def generate_image(prompt: str, model: str, quality: str, reference_image_path: str | None = None) -> str:
-    if reference_image_path:
-        return generate_package_images.request_edited_image_base64(
-            prompt,
-            Path(reference_image_path),
-            model,
-            quality,
-        )
+def _write_reference_image_data(reference_image_data: str) -> Path:
+    data = reference_image_data.strip()
+    mime_type = "image/png"
+    if data.startswith("data:") and "," in data:
+        header, data = data.split(",", 1)
+        mime_type = header[5:].split(";", 1)[0] or mime_type
+    suffix = ".jpg" if mime_type in {"image/jpeg", "image/jpg"} else ".png"
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    try:
+        temp_file.write(base64.b64decode(data))
+        return Path(temp_file.name)
+    finally:
+        temp_file.close()
+
+
+def generate_image(
+    prompt: str,
+    model: str,
+    quality: str,
+    reference_image_path: str | None = None,
+    reference_image_data: str | None = None,
+) -> str:
+    temp_reference_path: Path | None = None
+    if reference_image_data:
+        temp_reference_path = _write_reference_image_data(reference_image_data)
+    reference_path = temp_reference_path or (Path(reference_image_path) if reference_image_path else None)
+    try:
+        if reference_path:
+            return generate_package_images.request_edited_image_base64(
+                prompt,
+                reference_path,
+                model,
+                quality,
+            )
+    finally:
+        if temp_reference_path:
+            temp_reference_path.unlink(missing_ok=True)
     return generate_package_images.request_image_base64(prompt, model, quality)
 
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import base64
+import mimetypes
 import os
 import urllib.error
 import urllib.request
@@ -173,6 +175,14 @@ def call_server_image(
     reference_image_path: str | None = None,
     settings: dict[str, Any] | None = None,
 ) -> str:
+    reference_image_data = None
+    if reference_image_path:
+        path = Path(reference_image_path)
+        if path.exists():
+            mime_type = mimetypes.guess_type(path.name)[0] or "image/png"
+            encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+            reference_image_data = f"data:{mime_type};base64,{encoded}"
+
     response = call_server(
         "/images/generate",
         payload={
@@ -180,6 +190,7 @@ def call_server_image(
             "model": model,
             "quality": quality,
             "reference_image_path": reference_image_path,
+            "reference_image_data": reference_image_data,
         },
         settings=settings,
     )

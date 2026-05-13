@@ -816,6 +816,7 @@ def images_generate(payload: ImageGenerateRequest, user: dict = Depends(require_
             payload.model,
             payload.quality,
             payload.reference_image_path,
+            payload.reference_image_data,
         )
     except Exception as exc:
         raise _generation_error(exc) from exc

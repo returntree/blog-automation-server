@@ -250,6 +250,7 @@ class ImageGenerateRequest(BaseModel):
     model: str
     quality: str
     reference_image_path: str | None = None
+    reference_image_data: str | None = None
 
 
 class ImageGenerateResponse(BaseModel):
