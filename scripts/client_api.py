@@ -10,6 +10,7 @@ from typing import Any
 ROOT_DIR = Path(__file__).resolve().parents[1]
 CONFIG_DIR = ROOT_DIR / "config"
 CLIENT_SETTINGS_PATH = CONFIG_DIR / "client_settings.json"
+DIRECT_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
 class ClientApiError(RuntimeError):
@@ -58,7 +59,7 @@ def _request_json(
         request.add_header("Authorization", f"Bearer {token}")
 
     try:
-        with urllib.request.urlopen(request, timeout=300) as response:
+        with DIRECT_OPENER.open(request, timeout=300) as response:
             body = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         raw = exc.read().decode("utf-8", errors="replace")
