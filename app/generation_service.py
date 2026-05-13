@@ -99,11 +99,18 @@ def revise_draft(action: str | dict[str, Any], current_result: dict[str, Any], i
         "current_result": current_result,
         "instruction": instruction,
     }
-    prompt = (
-        "당신은 블로그 원고 편집자입니다. 반드시 JSON만 출력하세요. "
-        "입력된 현재 결과 JSON 구조를 유지하면서 사용자의 수정 요청을 반영해 새 결과 JSON을 반환하세요."
-    )
     should_check_length = revise_blog_draft.is_body_revision_request(instruction)
+    if should_check_length:
+        prompt = (
+            "당신은 블로그 원고 재작성자입니다. 반드시 JSON만 출력하세요. "
+            "사용자의 본문 수정 요청을 반영해 paragraphs 배열을 5~7개 문단으로 새로 작성하세요. "
+            "기존 title, images, tags는 요청이 없으면 유지하고, 본문은 2000자 이상 2500자 이하로 작성하세요."
+        )
+    else:
+        prompt = (
+            "당신은 블로그 원고 편집자입니다. 반드시 JSON만 출력하세요. "
+            "입력된 현재 결과 JSON 구조를 유지하면서 사용자의 수정 요청을 반영해 새 결과 JSON을 반환하세요."
+        )
     last_result: dict[str, Any] | None = None
     for attempt in range(3):
         response_text = revise_blog_draft.request_revision(prompt, payload)
