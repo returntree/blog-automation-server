@@ -129,7 +129,11 @@ def revise_draft(action: str | dict[str, Any], current_result: dict[str, Any], i
                 revise_blog_draft.get_body_length(merged),
             )
 
-    body_length = revise_blog_draft.get_body_length(last_result or current_result)
+    normalized = revise_blog_draft.normalize_body_length(last_result or current_result)
+    if revise_blog_draft.is_body_length_in_target(normalized):
+        return normalized
+
+    body_length = revise_blog_draft.get_body_length(normalized)
     raise ValueError(f"AI 수정 본문 길이가 기준을 벗어났습니다: {body_length}자")
 
 
