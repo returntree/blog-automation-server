@@ -107,7 +107,7 @@ def load_server_settings() -> ServerSettings:
         allow_origins=os.getenv("ALLOW_ORIGINS", "*").strip() or "*",
         default_plan=os.getenv("DEFAULT_PLAN", "starter").strip() or "starter",
         demo_username=os.getenv("DEMO_USERNAME", "admin").strip() or "admin",
-        demo_password=os.getenv("DEMO_PASSWORD", "change-this-password").strip() or "change-this-password",
+        demo_password=os.getenv("DEMO_PASSWORD", "1234").strip() or "1234",
         plan_limits=_load_plan_limits(),
     )
 

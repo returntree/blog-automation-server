@@ -25,12 +25,12 @@ def _ensure_dict(value: Any, fallback_message: str) -> dict[str, Any]:
 
 
 def generate_research(request: dict[str, Any], prompt: str) -> dict[str, Any]:
-    result = collect_blog_research.request_research(request, prompt)
+    result = collect_blog_research.request_research(prompt)
     return _ensure_dict(result, "리서치 결과를 JSON 객체로 받지 못했습니다.")
 
 
 def generate_titles(request: dict[str, Any], research: dict[str, Any], prompt: str) -> dict[str, Any]:
-    result = generate_title_options.request_title_options(request, research, prompt)
+    result = generate_title_options.request_title_options(prompt)
     return _ensure_dict(result, "제목 후보 결과를 JSON 객체로 받지 못했습니다.")
 
 
@@ -42,19 +42,23 @@ def generate_draft(
     target_body_length: int,
     max_attempts: int,
 ) -> dict[str, Any]:
-    result = generate_blog_draft.request_draft(
-        request,
-        research,
-        prompt,
-        minimum_body_length,
-        target_body_length,
-        max_attempts,
-    )
+    result: dict[str, Any] = {}
+    current_prompt = prompt
+    attempts = max(1, int(max_attempts or generate_blog_draft.MAX_DRAFT_ATTEMPTS))
+    for attempt_number in range(1, attempts + 1):
+        result = generate_blog_draft.request_draft(current_prompt, attempt_number)
+        try:
+            generate_blog_draft.validate_body_length(result)
+            break
+        except generate_blog_draft.BodyTooShortError:
+            if attempt_number >= attempts:
+                raise
+            current_prompt = generate_blog_draft.build_retry_prompt(prompt, attempt_number + 1)
     return _ensure_dict(result, "초안 결과를 JSON 객체로 받지 못했습니다.")
 
 
 def generate_draft_from_manual(request: dict[str, Any], prompt: str) -> dict[str, Any]:
-    result = generate_draft_from_manual_module.request_result(request, prompt)
+    result = generate_draft_from_manual_module.request_result(prompt)
     return _ensure_dict(result, "수동 원고 기반 초안 결과를 JSON 객체로 받지 못했습니다.")
 
 
@@ -64,16 +68,18 @@ def generate_draft_from_images(
     image_paths: list[str],
     prompt: str,
 ) -> dict[str, Any]:
-    result = generate_draft_from_images_module.request_result(request, research, image_paths, prompt)
+    content = generate_draft_from_images_module.build_request_content(
+        {**request, "selected_image_paths": image_paths},
+        research,
+    )
+    result = generate_draft_from_images_module.request_result(content)
     normalized = _ensure_dict(result, "이미지 기반 초안 결과를 JSON 객체로 받지 못했습니다.")
 
-    if not normalized.get("image_slots"):
-        try:
-            assignments = generate_draft_from_images_module.assign_images_to_paragraphs(normalized, image_paths)
-        except Exception:
-            assignments = []
-        if assignments:
-            normalized["image_slots"] = assignments
+    normalized = generate_draft_from_images_module.assign_images_to_paragraphs(
+        normalized,
+        image_paths,
+        request,
+    )
 
     return normalized
 
