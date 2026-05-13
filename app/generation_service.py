@@ -105,7 +105,7 @@ def revise_draft(action: str | dict[str, Any], current_result: dict[str, Any], i
     )
     should_check_length = revise_blog_draft.is_body_revision_request(instruction)
     last_result: dict[str, Any] | None = None
-    for attempt in range(2):
+    for attempt in range(3):
         response_text = revise_blog_draft.request_revision(prompt, payload)
         revised = revise_blog_draft.extract_output_json(response_text)
         merged = revise_blog_draft.validate_and_merge(
@@ -115,7 +115,7 @@ def revise_draft(action: str | dict[str, Any], current_result: dict[str, Any], i
         last_result = merged
         if not should_check_length or revise_blog_draft.is_body_length_in_target(merged):
             return merged
-        if attempt == 0:
+        if attempt < 2:
             payload["current_result"] = merged
             payload["instruction"] = revise_blog_draft.build_length_retry_instruction(
                 instruction,
