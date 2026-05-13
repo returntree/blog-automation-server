@@ -67,10 +67,12 @@ def generate_draft_from_images(
     research: dict[str, Any],
     image_paths: list[str],
     prompt: str,
+    image_items: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     content = generate_draft_from_images_module.build_request_content(
         {**request, "selected_image_paths": image_paths},
         research,
+        image_items=image_items or None,
     )
     result = generate_draft_from_images_module.request_result(content)
     normalized = _ensure_dict(result, "이미지 기반 초안 결과를 JSON 객체로 받지 못했습니다.")

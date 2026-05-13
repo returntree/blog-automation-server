@@ -790,6 +790,7 @@ def draft_generate_from_images(payload: ImageDraftGenerateRequest, user: dict = 
             payload.research,
             payload.image_paths,
             payload.prompt,
+            payload.image_items,
         )
     except Exception as exc:
         raise _generation_error(exc) from exc

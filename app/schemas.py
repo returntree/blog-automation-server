@@ -235,6 +235,7 @@ class ImageDraftGenerateRequest(BaseModel):
     request: dict[str, Any]
     research: dict[str, Any]
     image_paths: list[str] = Field(default_factory=list)
+    image_items: list[dict[str, Any]] = Field(default_factory=list)
     prompt: str
 
 

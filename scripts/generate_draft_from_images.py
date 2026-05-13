@@ -78,9 +78,14 @@ def build_thumbnail_prompt(data: dict, title: str) -> str:
     return ", ".join(parts)
 
 
-def build_request_content(data: dict, research_payload: dict | None = None) -> list[dict]:
+def build_request_content(
+    data: dict,
+    research_payload: dict | None = None,
+    image_items: list[dict] | None = None,
+) -> list[dict]:
     image_paths = [str(path).strip() for path in data.get("selected_image_paths", []) if str(path).strip()]
-    body_image_count = max(0, len(image_paths) - 1)
+    image_count = len(image_items) if image_items is not None else len(image_paths)
+    body_image_count = max(0, image_count - 1)
     research_block = build_research_summary(research_payload) if research_payload else ""
 
     image_order_rules: list[str] = []
@@ -142,7 +147,10 @@ def build_request_content(data: dict, research_payload: dict | None = None) -> l
 """.strip()
 
     content: list[dict] = [{"type": "input_text", "text": user_prompt}]
-    content.extend(build_image_item(path) for path in image_paths)
+    if image_items is not None:
+        content.extend(image_items)
+    else:
+        content.extend(build_image_item(path) for path in image_paths)
     return content
 
 
@@ -251,12 +259,14 @@ def assign_images_to_paragraphs(result: dict, image_paths: list[str], request_da
 
 
 def run_server_mode(data: dict, research_payload: dict | None, image_paths: list[str], prompt_text: str) -> dict:
+    image_items = [build_image_item(path) for path in image_paths]
     response = call_server(
         "/draft/generate-from-images",
         {
             "request": data,
             "research": research_payload,
             "image_paths": image_paths,
+            "image_items": image_items,
             "prompt": prompt_text,
         },
     )
