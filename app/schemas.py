@@ -239,7 +239,7 @@ class ImageDraftGenerateRequest(BaseModel):
 
 
 class DraftReviseRequest(BaseModel):
-    action: str
+    action: str | dict[str, Any]
     current_result: dict[str, Any]
     instruction: str
 

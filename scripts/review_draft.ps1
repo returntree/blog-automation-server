@@ -233,7 +233,8 @@ Set-WindowSafePosition $window
     function Invoke-ExternalPython {
         param(
             [string]$ScriptPath,
-            [string]$BusyMessage
+            [string]$BusyMessage,
+            [int]$TimeoutSeconds = 0
         )
 
         $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
@@ -256,20 +257,41 @@ Set-WindowSafePosition $window
 
         $frames = @("|", "/", "-", "\")
         $index = 0
+        $startedAt = Get-Date
+        $timedOut = $false
         while (-not $process.HasExited) {
+            if ($TimeoutSeconds -gt 0 -and ((Get-Date) - $startedAt).TotalSeconds -ge $TimeoutSeconds) {
+                $timedOut = $true
+                try { $process.Kill() } catch {}
+                try { [void]$process.WaitForExit(5000) } catch {}
+                break
+            }
             $statusText.Text = "$BusyMessage $($frames[$index])"
             $index = ($index + 1) % $frames.Count
             $window.Dispatcher.Invoke([action] {}, [System.Windows.Threading.DispatcherPriority]::Background)
             Start-Sleep -Milliseconds 180
         }
 
-        $stdout = $process.StandardOutput.ReadToEnd()
-        $stderr = $process.StandardError.ReadToEnd()
+        if ($timedOut -and -not $process.HasExited) {
+            return [pscustomobject]@{
+                ExitCode = -1
+                StdOut   = ""
+                StdErr   = (U "AI \uc218\uc815 \uc2dc\uac04\uc774 \ucd08\uacfc\ub418\uc5c8\uc2b5\ub2c8\ub2e4. \uc7a0\uc2dc \ud6c4 \ub2e4\uc2dc \uc2dc\ub3c4\ud574 \uc8fc\uc138\uc694.")
+                TimedOut = $true
+            }
+        }
+
+        try { $stdout = $process.StandardOutput.ReadToEnd() } catch { $stdout = "" }
+        try { $stderr = $process.StandardError.ReadToEnd() } catch { $stderr = "" }
+        if ($timedOut) {
+            $stderr = (($stderr + [Environment]::NewLine + (U "AI \uc218\uc815 \uc2dc\uac04\uc774 \ucd08\uacfc\ub418\uc5c8\uc2b5\ub2c8\ub2e4. \uc7a0\uc2dc \ud6c4 \ub2e4\uc2dc \uc2dc\ub3c4\ud574 \uc8fc\uc138\uc694.")).Trim())
+        }
 
         return [pscustomobject]@{
-            ExitCode = $process.ExitCode
+            ExitCode = $(if ($timedOut) { -1 } else { $process.ExitCode })
             StdOut   = $stdout
             StdErr   = $stderr
+            TimedOut = $timedOut
         }
     }
 
@@ -323,7 +345,13 @@ Set-WindowSafePosition $window
         [System.IO.File]::WriteAllText($actionPath, ($payload | ConvertTo-Json -Depth 4), $utf8Bom)
 
         Set-BusyState -IsBusy $true -Message (U "AI\uac00 \uc6d0\uace0\ub97c \uc218\uc815\ud558\ub294 \uc911\uc785\ub2c8\ub2e4...")
-        $processResult = Invoke-ExternalPython -ScriptPath $reviseScript -BusyMessage (U "AI \uc218\uc815 \uc801\uc6a9 \uc911")
+        $processResult = Invoke-ExternalPython -ScriptPath $reviseScript -BusyMessage (U "AI \uc218\uc815 \uc801\uc6a9 \uc911") -TimeoutSeconds 240
+        if ($processResult.TimedOut) {
+            Set-BusyState -IsBusy $false -Message (U "AI \uc218\uc815 \uc2dc\uac04\uc774 \ucd08\uacfc\ub418\uc5c8\uc2b5\ub2c8\ub2e4.")
+            $errorText = ($processResult.StdErr + [Environment]::NewLine + $processResult.StdOut).Trim()
+            [void][System.Windows.MessageBox]::Show($errorText, (U "AI \uc218\uc815 \uc2dc\uac04 \ucd08\uacfc"))
+            return
+        }
         if ($processResult.ExitCode -ne 0) {
             Set-BusyState -IsBusy $false -Message (U "AI \uc218\uc815\uc5d0 \uc2e4\ud328\ud588\uc2b5\ub2c8\ub2e4.")
             $errorText = ($processResult.StdErr + [Environment]::NewLine + $processResult.StdOut).Trim()

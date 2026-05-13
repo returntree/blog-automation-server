@@ -57,11 +57,62 @@ def validate_and_merge(current_result: dict, revised: dict) -> dict:
     return merged
 
 
-def run_server_mode(action: dict, current_result: dict, instruction: str) -> dict:
+def build_revision_input(prompt: str, payload: dict) -> str:
+    current_result = payload.get("current_result") or {}
+    instruction = str(payload.get("instruction") or "").strip()
+    return f"""
+{prompt}
+
+[현재 초안 JSON]
+{json.dumps(current_result, ensure_ascii=False, indent=2)}
+
+[수정 요청]
+{instruction}
+
+[작업 지침]
+- 반드시 JSON 객체만 출력하세요.
+- title, paragraphs, images, tags 구조를 유지하세요.
+- 수정 요청과 관련 없는 images 배열은 삭제하거나 비우지 마세요.
+- 전체를 다시 작성할 필요가 없으면 수정된 필드만 반환해도 됩니다.
+- 제목, 태그, 이미지 프롬프트를 제외한 본문은 2500자 이상을 유지하세요.
+""".strip()
+
+
+def request_revision(prompt: str, payload: dict) -> dict:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY 환경 변수가 설정되어 있지 않습니다.")
+
+    body = {
+        "model": MODEL,
+        "input": build_revision_input(prompt, payload),
+        "text": {"format": {"type": "json_object"}},
+    }
+    api_request = request.Request(
+        RESPONSES_API_URL,
+        data=json.dumps(body).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with request.urlopen(api_request, timeout=180) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"AI 수정 API 호출 실패: {detail}") from exc
+    except (TimeoutError, error.URLError) as exc:
+        raise RuntimeError("AI 수정 API 연결 시간이 초과되었거나 서버에 연결하지 못했습니다.") from exc
+
+
+def run_server_mode(current_result: dict, instruction: str) -> dict:
     response = call_server(
         "/draft/revise",
         {
-            "action": action,
+            "action": "ai",
             "current_result": current_result,
             "instruction": instruction,
         },
@@ -82,7 +133,7 @@ def main() -> int:
     if is_server_mode():
         try:
             print("server mode로 AI 수정 요청을 전달합니다.", flush=True)
-            merged = run_server_mode(action, current_result, instruction)
+            merged = run_server_mode(current_result, instruction)
             write_json_file(RESULT_FILE, merged)
             print(f"AI 수정 저장 완료: {RESULT_FILE}")
             return 0

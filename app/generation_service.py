@@ -84,11 +84,15 @@ def generate_draft_from_images(
     return normalized
 
 
-def revise_draft(action: str, current_result: dict[str, Any], instruction: str) -> dict[str, Any]:
-    if action == "manual":
+def revise_draft(action: str | dict[str, Any], current_result: dict[str, Any], instruction: str) -> dict[str, Any]:
+    if isinstance(action, dict):
+        action_value = str(action.get("action") or "ai").strip().lower()
+    else:
+        action_value = str(action).strip().lower()
+    if action_value == "manual":
         return current_result
 
-    if action != "ai":
+    if action_value != "ai":
         raise ValueError("지원하지 않는 수정 방식입니다. 'manual' 또는 'ai'만 사용할 수 있습니다.")
 
     payload = {
@@ -101,7 +105,7 @@ def revise_draft(action: str, current_result: dict[str, Any], instruction: str) 
     )
     response_text = revise_blog_draft.request_revision(prompt, payload)
     revised = revise_blog_draft.extract_output_json(response_text)
-    return _ensure_dict(revised, "AI 수정 결과를 JSON 객체로 받지 못했습니다.")
+    return revise_blog_draft.validate_and_merge(current_result, _ensure_dict(revised, "AI 수정 결과를 JSON 객체로 받지 못했습니다."))
 
 
 def generate_image(prompt: str, model: str, quality: str, reference_image_path: str | None = None) -> str:
