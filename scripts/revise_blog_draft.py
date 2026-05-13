@@ -98,6 +98,18 @@ def is_body_length_in_target(result: dict) -> bool:
 def build_revision_input(prompt: str, payload: dict) -> str:
     current_result = payload.get("current_result") or {}
     instruction = str(payload.get("instruction") or "").strip()
+    if is_body_revision_request(instruction):
+        scope_instruction = (
+            "- 본문 수정/재작성 요청이므로 paragraphs 배열을 반드시 전체 반환하세요.\n"
+            "- paragraphs는 5~7개 문단 객체로 구성하고, 각 text는 300~450자 정도로 작성하세요.\n"
+            "- 현재 초안이 짧아도 방문 계기, 매장 분위기, 주문 메뉴, 맛과 양, 가격 느낌, 아쉬운 점, 재방문 의사를 자연스럽게 확장하세요."
+        )
+    else:
+        scope_instruction = (
+            "- 전체를 다시 작성할 필요가 없으면 수정된 필드만 반환해도 됩니다.\n"
+            "- 수정 요청이 제목이나 태그에만 해당하면 해당 필드만 반환하세요.\n"
+            "- 본문 수정 요청이 아니라면 paragraphs를 반환하지 말고 현재 본문을 그대로 유지하세요."
+        )
     return f"""
 {prompt}
 
@@ -111,9 +123,7 @@ def build_revision_input(prompt: str, payload: dict) -> str:
 - 반드시 JSON 객체만 출력하세요.
 - title, paragraphs, images, tags 구조를 유지하세요.
 - 수정 요청과 관련 없는 images 배열은 삭제하거나 비우지 마세요.
-- 전체를 다시 작성할 필요가 없으면 수정된 필드만 반환해도 됩니다.
-- 수정 요청이 제목이나 태그에만 해당하면 해당 필드만 반환하세요.
-- 본문 수정 요청이 아니라면 paragraphs를 반환하지 말고 현재 본문을 그대로 유지하세요.
+{scope_instruction}
 - 본문 수정이나 재작성 요청이면 본문을 5~7개 문단으로 나누고, 제목/태그/이미지 프롬프트를 제외한 본문만 반드시 2000자 이상 2500자 이하로 맞추세요.
 - 본문 재작성 시 각 문단은 300~450자 정도로 작성하고, 방문 계기/분위기/메뉴/맛/가격/재방문 의사를 자연스럽게 포함하세요.
 """.strip()
