@@ -191,6 +191,14 @@ def _record_server_usage(username: str, event_type: str, stage: str) -> None:
     )
 
 
+def _generation_error(exc: Exception) -> HTTPException:
+    message = str(exc).strip() or exc.__class__.__name__
+    return HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail=f"서버 생성 작업 실패: {message}",
+    )
+
+
 @app.get("/health")
 def health() -> dict:
     return {"ok": True, "service": "blog_automation_server"}
@@ -728,27 +736,36 @@ def admin_usage_summary(
 
 @app.post("/research/generate")
 def research_generate(payload: ResearchGenerateRequest, user: dict = Depends(require_authorized_user)) -> dict:
-    result = generation_service.generate_research(payload.request, payload.prompt)
+    try:
+        result = generation_service.generate_research(payload.request, payload.prompt)
+    except Exception as exc:
+        raise _generation_error(exc) from exc
     return {"ok": True, "message": "research generated", "research_result": result}
 
 
 @app.post("/titles/generate")
 def titles_generate(payload: TitleGenerateRequest, user: dict = Depends(require_authorized_user)) -> dict:
-    result = generation_service.generate_titles(payload.request, payload.research, payload.prompt)
+    try:
+        result = generation_service.generate_titles(payload.request, payload.research, payload.prompt)
+    except Exception as exc:
+        raise _generation_error(exc) from exc
     return {"ok": True, "message": "title options generated", "title_options_result": result}
 
 
 @app.post("/draft/generate")
 def draft_generate(payload: DraftGenerateRequest, user: dict = Depends(require_authorized_user)) -> dict:
     _ensure_usage_available(user, "monthly_drafts")
-    result = generation_service.generate_draft(
-        payload.request,
-        payload.research,
-        payload.prompt,
-        payload.minimum_body_length,
-        payload.target_body_length,
-        payload.max_attempts,
-    )
+    try:
+        result = generation_service.generate_draft(
+            payload.request,
+            payload.research,
+            payload.prompt,
+            payload.minimum_body_length,
+            payload.target_body_length,
+            payload.max_attempts,
+        )
+    except Exception as exc:
+        raise _generation_error(exc) from exc
     _record_server_usage(user["username"], "draft_generated", "draft_generation")
     return {"ok": True, "message": "draft generated", "draft_result": result}
 
@@ -756,7 +773,10 @@ def draft_generate(payload: DraftGenerateRequest, user: dict = Depends(require_a
 @app.post("/draft/generate-from-manual")
 def draft_generate_from_manual(payload: ManualDraftGenerateRequest, user: dict = Depends(require_authorized_user)) -> dict:
     _ensure_usage_available(user, "monthly_drafts")
-    result = generation_service.generate_draft_from_manual(payload.request, payload.prompt)
+    try:
+        result = generation_service.generate_draft_from_manual(payload.request, payload.prompt)
+    except Exception as exc:
+        raise _generation_error(exc) from exc
     _record_server_usage(user["username"], "draft_generated", "draft_generation_manual")
     return {"ok": True, "message": "manual draft generated", "draft_result": result}
 
@@ -764,31 +784,40 @@ def draft_generate_from_manual(payload: ManualDraftGenerateRequest, user: dict =
 @app.post("/draft/generate-from-images")
 def draft_generate_from_images(payload: ImageDraftGenerateRequest, user: dict = Depends(require_authorized_user)) -> dict:
     _ensure_usage_available(user, "monthly_drafts")
-    result = generation_service.generate_draft_from_images(
-        payload.request,
-        payload.research,
-        payload.image_paths,
-        payload.prompt,
-    )
+    try:
+        result = generation_service.generate_draft_from_images(
+            payload.request,
+            payload.research,
+            payload.image_paths,
+            payload.prompt,
+        )
+    except Exception as exc:
+        raise _generation_error(exc) from exc
     _record_server_usage(user["username"], "draft_generated", "draft_generation_images")
     return {"ok": True, "message": "image draft generated", "draft_result": result}
 
 
 @app.post("/draft/revise")
 def draft_revise(payload: DraftReviseRequest, user: dict = Depends(require_authorized_user)) -> dict:
-    result = generation_service.revise_draft(payload.action, payload.current_result, payload.instruction)
+    try:
+        result = generation_service.revise_draft(payload.action, payload.current_result, payload.instruction)
+    except Exception as exc:
+        raise _generation_error(exc) from exc
     return {"ok": True, "message": "draft revised", "revised_result": result}
 
 
 @app.post("/images/generate", response_model=ImageGenerateResponse)
 def images_generate(payload: ImageGenerateRequest, user: dict = Depends(require_authorized_user)) -> ImageGenerateResponse:
     _ensure_usage_available(user, "monthly_images")
-    image_base64 = generation_service.generate_image(
-        payload.prompt,
-        payload.model,
-        payload.quality,
-        payload.reference_image_path,
-    )
+    try:
+        image_base64 = generation_service.generate_image(
+            payload.prompt,
+            payload.model,
+            payload.quality,
+            payload.reference_image_path,
+        )
+    except Exception as exc:
+        raise _generation_error(exc) from exc
     _record_server_usage(user["username"], "image_generated", "image_generation")
     return ImageGenerateResponse(image_base64=image_base64)
 
