@@ -102,6 +102,7 @@ def build_revision_input(prompt: str, payload: dict) -> str:
         scope_instruction = (
             "- 본문 수정/재작성 요청이므로 paragraphs 배열을 반드시 전체 반환하세요.\n"
             "- paragraphs는 5~7개 문단 객체로 구성하고, 각 text는 300~450자 정도로 작성하세요.\n"
+            "- paragraphs 배열 전체의 text 합계가 2000자 미만이면 실패입니다. 충분히 길게 작성하세요.\n"
             "- 현재 초안이 짧아도 방문 계기, 매장 분위기, 주문 메뉴, 맛과 양, 가격 느낌, 아쉬운 점, 재방문 의사를 자연스럽게 확장하세요."
         )
     else:
@@ -137,6 +138,7 @@ def request_revision(prompt: str, payload: dict) -> dict:
     body = {
         "model": MODEL,
         "input": build_revision_input(prompt, payload),
+        "max_output_tokens": 5000,
         "text": {"format": {"type": "json_object"}},
     }
     api_request = request.Request(
