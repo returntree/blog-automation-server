@@ -100,11 +100,13 @@ def revise_draft(action: str | dict[str, Any], current_result: dict[str, Any], i
         "instruction": instruction,
     }
     should_check_length = revise_blog_draft.is_body_revision_request(instruction)
+    minimum, maximum = revise_blog_draft.get_revision_length_range(instruction)
     if should_check_length:
         prompt = (
             "당신은 블로그 원고 재작성자입니다. 반드시 JSON만 출력하세요. "
             "사용자의 본문 수정 요청을 반영해 paragraphs 배열을 5~7개 문단으로 새로 작성하세요. "
-            "기존 title, images, tags는 요청이 없으면 유지하고, 본문은 2000자 이상 2500자 이하로 작성하세요."
+            "최초 원고 작성 규칙과 동일하게 포스팅 주체자 관점, 후기형 톤, 구체 정보, 충분한 분량을 유지하세요. "
+            f"기존 title, images, tags는 요청이 없으면 유지하고, 본문은 {minimum}자 이상 {maximum}자 이하로 작성하세요."
         )
     else:
         prompt = (
@@ -120,7 +122,7 @@ def revise_draft(action: str | dict[str, Any], current_result: dict[str, Any], i
             _ensure_dict(revised, "AI 수정 결과를 JSON 객체로 받지 못했습니다."),
         )
         last_result = merged
-        if not should_check_length or revise_blog_draft.is_body_length_in_target(merged):
+        if not should_check_length or revise_blog_draft.is_body_length_in_target(merged, instruction):
             return merged
         if attempt < 2:
             payload["current_result"] = merged
@@ -129,8 +131,8 @@ def revise_draft(action: str | dict[str, Any], current_result: dict[str, Any], i
                 revise_blog_draft.get_body_length(merged),
             )
 
-    normalized = revise_blog_draft.normalize_body_length(last_result or current_result)
-    if revise_blog_draft.is_body_length_in_target(normalized):
+    normalized = revise_blog_draft.normalize_body_length(last_result or current_result, instruction)
+    if revise_blog_draft.is_body_length_in_target(normalized, instruction):
         return normalized
 
     body_length = revise_blog_draft.get_body_length(normalized)

@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from urllib import error, request
@@ -13,6 +14,8 @@ MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 RESPONSES_API_URL = "https://api.openai.com/v1/responses"
 MIN_REVISED_BODY_LENGTH = 2000
 MAX_REVISED_BODY_LENGTH = 2500
+MIN_ALLOWED_BODY_LENGTH = 1800
+MAX_ALLOWED_BODY_LENGTH = 6000
 
 
 def configure_console_encoding() -> None:
@@ -65,42 +68,82 @@ def get_body_length(result: dict) -> int:
     return len(text.strip())
 
 
+def get_revision_length_range(instruction: str) -> tuple[int, int]:
+    text = str(instruction or "")
+    range_match = re.search(r"(\d{3,5})\s*(?:~|-|부터|에서)\s*(\d{3,5})\s*자", text)
+    if range_match:
+        lower = int(range_match.group(1))
+        upper = int(range_match.group(2))
+        lower, upper = min(lower, upper), max(lower, upper)
+        return (
+            max(MIN_ALLOWED_BODY_LENGTH, lower),
+            min(MAX_ALLOWED_BODY_LENGTH, max(upper, lower + 300)),
+        )
+
+    minimum_match = re.search(r"(\d{3,5})\s*자\s*(?:이상|넘게|넘도록)", text)
+    if minimum_match:
+        lower = max(MIN_ALLOWED_BODY_LENGTH, int(minimum_match.group(1)))
+        return lower, min(MAX_ALLOWED_BODY_LENGTH, max(lower + 700, MAX_REVISED_BODY_LENGTH))
+
+    approx_match = re.search(r"(\d{3,5})\s*자\s*(?:정도|내외|가량)", text)
+    if approx_match:
+        target = int(approx_match.group(1))
+        return (
+            max(MIN_ALLOWED_BODY_LENGTH, target - 200),
+            min(MAX_ALLOWED_BODY_LENGTH, target + 300),
+        )
+
+    return MIN_REVISED_BODY_LENGTH, MAX_REVISED_BODY_LENGTH
+
+
 def is_body_revision_request(instruction: str) -> bool:
     text = str(instruction or "").strip().lower()
     if not text:
         return False
+    body_keywords = (
+        "본문", "원고", "글", "문단", "재작성", "수정", "다듬", "보완", "정리", "늘려",
+        "길게", "짧", "분량", "말투", "문체", "톤", "후기", "리뷰", "방문기", "블로거",
+        "자연스럽", "작성", "체험", "경험",
+    )
+    body_specific_keywords = (
+        "본문", "원고", "글", "문단", "재작성", "말투", "문체", "톤", "후기", "리뷰",
+        "방문기", "블로거", "체험", "경험",
+    )
     if ("제목만" in text or "태그만" in text) and not any(
-        keyword in text for keyword in ("본문", "원고", "글", "문단", "재작성", "말투", "문체", "톤", "후기", "블로거")
+        keyword in text for keyword in body_specific_keywords
     ):
         return False
     return any(
         keyword in text
-        for keyword in ("본문", "원고", "글", "문단", "재작성", "말투", "문체", "톤", "후기", "블로거", "자연스럽", "작성")
+        for keyword in body_keywords
     )
 
 
 def build_length_retry_instruction(instruction: str, body_length: int) -> str:
+    minimum, maximum = get_revision_length_range(instruction)
     return (
         f"{instruction}\n\n"
         f"이전 AI 수정 결과의 본문 길이는 {body_length}자입니다. "
-        f"본문 수정/재작성 요청이므로 본문을 반드시 {MIN_REVISED_BODY_LENGTH}자 이상 "
-        f"{MAX_REVISED_BODY_LENGTH}자 이하로 다시 작성하세요. "
+        f"본문 수정/재작성 요청이므로 본문을 반드시 {minimum}자 이상 "
+        f"{maximum}자 이하로 다시 작성하세요. "
         "5~7개 문단으로 나누고, 각 문단은 300~450자 정도로 작성하세요. "
         "제목, 태그, 이미지 프롬프트는 불필요하게 바꾸지 마세요."
     )
 
 
-def is_body_length_in_target(result: dict) -> bool:
+def is_body_length_in_target(result: dict, instruction: str = "") -> bool:
+    minimum, maximum = get_revision_length_range(instruction)
     body_length = get_body_length(result)
-    return MIN_REVISED_BODY_LENGTH <= body_length <= MAX_REVISED_BODY_LENGTH
+    return minimum <= body_length <= maximum
 
 
-def normalize_body_length(result: dict) -> dict:
+def normalize_body_length(result: dict, instruction: str = "") -> dict:
     normalized = dict(result)
     paragraphs = [dict(item) for item in normalized.get("paragraphs", []) if isinstance(item, dict)]
     if not paragraphs:
         return normalized
 
+    minimum, maximum = get_revision_length_range(instruction)
     title = str(normalized.get("title") or "이번 방문").strip()
     additions = [
         f"{title}를 정리하면서 가장 먼저 떠올린 부분은 방문 전 기대했던 점과 실제로 확인한 내용의 차이였습니다. 짧은 정보만 보고 판단하면 분위기, 동선, 대기 흐름, 이용 편의성을 놓치기 쉬운데, 직접 경험해 보니 결과 자체보다 그 과정에서 느껴지는 현실적인 기준이 더 중요하게 다가왔습니다.",
@@ -116,24 +159,26 @@ def normalize_body_length(result: dict) -> dict:
         "이용 방식은 처음 방문이라면 가장 기본적인 선택지를 중심으로 잡고, 여유가 있으면 추가 옵션을 확인하는 방식이 무난했습니다. 처음부터 많은 것을 한 번에 결정하기보다 인원, 시간, 목적에 맞춰 고르면 만족도가 높습니다. 선택이 어렵다면 현장 안내나 최근 후기를 참고하는 것도 방법입니다.",
         "재방문 여부를 묻는다면 저는 조건부로 다시 가볼 만하다고 정리하고 싶습니다. 붐비는 시간의 대기와 이동을 감안할 수 있다면 장점이 분명했고, 조용한 경험을 원한다면 시간대를 조절하는 것이 좋아 보였습니다. 기대치를 현실적으로 잡고 방문하면 후회보다는 참고할 만한 경험이 될 가능성이 큽니다.",
         "마지막으로 이 후기는 특정 장점만 강조하기보다 실제로 방문이나 이용을 고민하는 분들이 궁금해할 부분을 기준으로 정리했습니다. 분위기, 비용, 편의성, 만족도는 사람마다 받아들이는 기준이 다르기 때문에 제 경험은 참고용으로 봐주시면 좋겠습니다. 방문 계획이 있다면 최신 정보와 본인 일정에 맞춰 한 번 더 확인해 보세요.",
+        "개인적으로는 이런 방문 후기를 볼 때 장점만큼이나 아쉬운 지점이 함께 적혀 있을 때 더 신뢰가 간다고 느낍니다. 그래서 전체적인 만족도는 좋았더라도 이동이나 대기, 이용 방식처럼 실제 방문 전에 알아두면 좋은 부분을 같이 남겨두는 편이 좋겠습니다. 같은 장소라도 누구와 가는지, 어떤 시간에 가는지에 따라 체감이 달라질 수 있습니다.",
+        "처음 방문하는 분이라면 기대 포인트를 너무 넓게 잡기보다 내가 중요하게 보는 기준을 먼저 정해두면 판단이 쉬웠습니다. 조용한 분위기를 원하는지, 접근성을 더 보는지, 가격 대비 만족도를 중시하는지에 따라 같은 경험도 다르게 받아들여집니다. 이 글도 그런 기준을 세우는 데 도움이 되는 참고 후기로 봐주시면 좋겠습니다.",
     ]
 
-    while get_body_length({"paragraphs": paragraphs}) < MIN_REVISED_BODY_LENGTH and additions:
+    while get_body_length({"paragraphs": paragraphs}) < minimum and additions:
         paragraphs.append({"text": additions.pop(0)})
 
     body_length = get_body_length({"paragraphs": paragraphs})
-    if body_length > MAX_REVISED_BODY_LENGTH:
+    if body_length > maximum:
         kept: list[dict] = []
         current_length = 0
         for paragraph in paragraphs:
             text = str(paragraph.get("text", "")).strip()
             separator_length = 2 if kept else 0
             next_length = current_length + separator_length + len(text)
-            if next_length <= MAX_REVISED_BODY_LENGTH:
+            if next_length <= maximum:
                 kept.append({**paragraph, "text": text})
                 current_length = next_length
                 continue
-            remaining = MAX_REVISED_BODY_LENGTH - current_length - separator_length
+            remaining = maximum - current_length - separator_length
             if remaining > 80:
                 kept.append({**paragraph, "text": text[:remaining].rstrip()})
             break
@@ -146,11 +191,23 @@ def normalize_body_length(result: dict) -> dict:
 def build_revision_input(prompt: str, payload: dict) -> str:
     current_result = payload.get("current_result") or {}
     instruction = str(payload.get("instruction") or "").strip()
+    minimum, maximum = get_revision_length_range(instruction)
+    base_rules = f"""
+[수정 시 유지할 기본 원고 규칙]
+- 최초 원고 작성 규칙과 동일하게 포스팅 주체자 관점을 유지하세요.
+- 포스팅 주체자가 일반 블로거, 후기 작성자, 방문자라면 업체 입장 표현인 "저희", "저희 매장", "저희 음식"을 쓰지 마세요.
+- 후기형, 솔직한, 방문기, 내돈내산, 광고처럼 보이지 않게 같은 요청이 있으면 업체 소개문이 아니라 개인 체험 기반 후기문을 우선하세요.
+- 현재 초안에 있는 구체 정보(방문 장소, 메뉴, 식감, 양, 분위기, 응대, 주차, 대기, 재방문 의사)는 삭제하거나 요약하지 말고 자연스럽게 유지·확장하세요.
+- 확인되지 않은 정보는 단정하지 말고 "방문 전 확인을 권합니다"처럼 안전하게 표현하세요.
+- 제목, 태그, 이미지 프롬프트를 제외한 본문만 일반 텍스트 기준으로 {minimum}자 이상 {maximum}자 이하가 되게 작성하세요.
+- 본문은 최소 6개 이상의 문단으로 구성하고, 각 문단은 블로그 본문용으로 충분한 길이를 가지게 작성하세요.
+- 단순 요약이나 짧은 정리는 실패입니다. 사용자의 수정 요청을 반영하되 완성 원고 분량을 유지하세요.
+""".strip()
     if is_body_revision_request(instruction):
         scope_instruction = (
             "- 본문 수정/재작성 요청이므로 paragraphs 배열을 반드시 전체 반환하세요.\n"
             "- paragraphs는 5~7개 문단 객체로 구성하고, 각 text는 300~450자 정도로 작성하세요.\n"
-            "- paragraphs 배열 전체의 text 합계가 2000자 미만이면 실패입니다. 충분히 길게 작성하세요.\n"
+            f"- paragraphs 배열 전체의 text 합계가 {minimum}자 미만이면 실패입니다. 충분히 길게 작성하세요.\n"
             "- 현재 초안이 짧아도 방문 계기, 매장 분위기, 주문 메뉴, 맛과 양, 가격 느낌, 아쉬운 점, 재방문 의사를 자연스럽게 확장하세요."
         )
     else:
@@ -161,6 +218,8 @@ def build_revision_input(prompt: str, payload: dict) -> str:
         )
     return f"""
 {prompt}
+
+{base_rules}
 
 [현재 초안 JSON]
 {json.dumps(current_result, ensure_ascii=False, indent=2)}
@@ -173,7 +232,7 @@ def build_revision_input(prompt: str, payload: dict) -> str:
 - title, paragraphs, images, tags 구조를 유지하세요.
 - 수정 요청과 관련 없는 images 배열은 삭제하거나 비우지 마세요.
 {scope_instruction}
-- 본문 수정이나 재작성 요청이면 본문을 5~7개 문단으로 나누고, 제목/태그/이미지 프롬프트를 제외한 본문만 반드시 2000자 이상 2500자 이하로 맞추세요.
+- 본문 수정이나 재작성 요청이면 본문을 5~7개 문단으로 나누고, 제목/태그/이미지 프롬프트를 제외한 본문만 반드시 {minimum}자 이상 {maximum}자 이하로 맞추세요.
 - 본문 재작성 시 각 문단은 300~450자 정도로 작성하고, 방문 계기/분위기/메뉴/맛/가격/재방문 의사를 자연스럽게 포함하세요.
 """.strip()
 
@@ -256,7 +315,8 @@ def main() -> int:
 - title, paragraphs, images, tags 구조를 유지하세요.
 - images의 file_name, type, 순서를 유지하세요.
 - 문단을 바꾸더라도 images 배열 자체는 비틀리지 마세요.
-- 본문을 수정하는 경우 본문을 5~7개 문단으로 나누고, 제목/태그/이미지 프롬프트를 제외한 본문만 반드시 2000자 이상 2500자 이하로 맞추세요.
+- 본문을 수정하는 경우 본문을 5~7개 문단으로 나누고, 제목/태그/이미지 프롬프트를 제외한 본문만 반드시 {get_revision_length_range(instruction)[0]}자 이상 {get_revision_length_range(instruction)[1]}자 이하로 맞추세요.
+- 최초 원고 작성 규칙과 동일하게 포스팅 주체자 관점, 후기형 톤, 구체 정보, 충분한 분량을 유지하세요.
 """.strip()
 
     api_key = os.getenv("OPENAI_API_KEY")
