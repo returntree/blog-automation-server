@@ -3,6 +3,7 @@
 import sys
 import base64
 import tempfile
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -145,14 +146,18 @@ def revise_draft(action: str | dict[str, Any], current_result: dict[str, Any], i
 
 def _write_reference_image_data(reference_image_data: str) -> Path:
     data = reference_image_data.strip()
-    mime_type = "image/png"
     if data.startswith("data:") and "," in data:
-        header, data = data.split(",", 1)
-        mime_type = header[5:].split(";", 1)[0] or mime_type
-    suffix = ".jpg" if mime_type in {"image/jpeg", "image/jpg"} else ".png"
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        _, data = data.split(",", 1)
+    raw_bytes = base64.b64decode(data)
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
     try:
-        temp_file.write(base64.b64decode(data))
+        from PIL import Image, ImageOps
+
+        with Image.open(BytesIO(raw_bytes)) as image:
+            image = ImageOps.exif_transpose(image)
+            if image.mode != "RGB":
+                image = image.convert("RGB")
+            image.save(temp_file, format="PNG")
         return Path(temp_file.name)
     finally:
         temp_file.close()
