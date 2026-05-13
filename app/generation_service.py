@@ -103,9 +103,27 @@ def revise_draft(action: str | dict[str, Any], current_result: dict[str, Any], i
         "당신은 블로그 원고 편집자입니다. 반드시 JSON만 출력하세요. "
         "입력된 현재 결과 JSON 구조를 유지하면서 사용자의 수정 요청을 반영해 새 결과 JSON을 반환하세요."
     )
-    response_text = revise_blog_draft.request_revision(prompt, payload)
-    revised = revise_blog_draft.extract_output_json(response_text)
-    return revise_blog_draft.validate_and_merge(current_result, _ensure_dict(revised, "AI 수정 결과를 JSON 객체로 받지 못했습니다."))
+    should_check_length = revise_blog_draft.is_body_revision_request(instruction)
+    last_result: dict[str, Any] | None = None
+    for attempt in range(2):
+        response_text = revise_blog_draft.request_revision(prompt, payload)
+        revised = revise_blog_draft.extract_output_json(response_text)
+        merged = revise_blog_draft.validate_and_merge(
+            current_result,
+            _ensure_dict(revised, "AI 수정 결과를 JSON 객체로 받지 못했습니다."),
+        )
+        last_result = merged
+        if not should_check_length or revise_blog_draft.is_body_length_in_target(merged):
+            return merged
+        if attempt == 0:
+            payload["current_result"] = merged
+            payload["instruction"] = revise_blog_draft.build_length_retry_instruction(
+                instruction,
+                revise_blog_draft.get_body_length(merged),
+            )
+
+    body_length = revise_blog_draft.get_body_length(last_result or current_result)
+    raise ValueError(f"AI 수정 본문 길이가 기준을 벗어났습니다: {body_length}자")
 
 
 def generate_image(prompt: str, model: str, quality: str, reference_image_path: str | None = None) -> str:

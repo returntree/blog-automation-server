@@ -11,6 +11,8 @@ ACTION_FILE = BASE_DIR / "inputs" / "draft_review_action.json"
 RESULT_FILE = BASE_DIR / "jobs" / "latest_result.json"
 MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 RESPONSES_API_URL = "https://api.openai.com/v1/responses"
+MIN_REVISED_BODY_LENGTH = 2000
+MAX_REVISED_BODY_LENGTH = 2500
 
 
 def configure_console_encoding() -> None:
@@ -57,6 +59,41 @@ def validate_and_merge(current_result: dict, revised: dict) -> dict:
     return merged
 
 
+def get_body_length(result: dict) -> int:
+    paragraphs = result.get("paragraphs") or []
+    text = "\n\n".join(str(item.get("text", "")) for item in paragraphs if isinstance(item, dict))
+    return len(text.strip())
+
+
+def is_body_revision_request(instruction: str) -> bool:
+    text = str(instruction or "").strip().lower()
+    if not text:
+        return False
+    if ("제목만" in text or "태그만" in text) and not any(
+        keyword in text for keyword in ("본문", "원고", "글", "문단", "재작성", "말투", "문체", "톤", "후기", "블로거")
+    ):
+        return False
+    return any(
+        keyword in text
+        for keyword in ("본문", "원고", "글", "문단", "재작성", "말투", "문체", "톤", "후기", "블로거", "자연스럽", "작성")
+    )
+
+
+def build_length_retry_instruction(instruction: str, body_length: int) -> str:
+    return (
+        f"{instruction}\n\n"
+        f"이전 AI 수정 결과의 본문 길이는 {body_length}자입니다. "
+        f"본문 수정/재작성 요청이므로 본문을 반드시 {MIN_REVISED_BODY_LENGTH}자 이상 "
+        f"{MAX_REVISED_BODY_LENGTH}자 이하로 다시 작성하세요. "
+        "제목, 태그, 이미지 프롬프트는 불필요하게 바꾸지 마세요."
+    )
+
+
+def is_body_length_in_target(result: dict) -> bool:
+    body_length = get_body_length(result)
+    return MIN_REVISED_BODY_LENGTH <= body_length <= MAX_REVISED_BODY_LENGTH
+
+
 def build_revision_input(prompt: str, payload: dict) -> str:
     current_result = payload.get("current_result") or {}
     instruction = str(payload.get("instruction") or "").strip()
@@ -76,7 +113,7 @@ def build_revision_input(prompt: str, payload: dict) -> str:
 - 전체를 다시 작성할 필요가 없으면 수정된 필드만 반환해도 됩니다.
 - 수정 요청이 제목이나 태그에만 해당하면 해당 필드만 반환하세요.
 - 본문 수정 요청이 아니라면 paragraphs를 반환하지 말고 현재 본문을 그대로 유지하세요.
-- 본문 수정이나 재작성 요청이면 제목, 태그, 이미지 프롬프트를 제외한 본문만 2000~2500자 정도로 맞추세요.
+- 본문 수정이나 재작성 요청이면 제목, 태그, 이미지 프롬프트를 제외한 본문만 반드시 2000자 이상 2500자 이하로 맞추세요.
 """.strip()
 
 
@@ -157,7 +194,7 @@ def main() -> int:
 - title, paragraphs, images, tags 구조를 유지하세요.
 - images의 file_name, type, 순서를 유지하세요.
 - 문단을 바꾸더라도 images 배열 자체는 비틀리지 마세요.
-- 본문을 수정하는 경우 제목, 태그, 이미지 프롬프트를 제외한 본문만 2000~2500자 정도로 맞추세요.
+- 본문을 수정하는 경우 제목, 태그, 이미지 프롬프트를 제외한 본문만 반드시 2000자 이상 2500자 이하로 맞추세요.
 """.strip()
 
     api_key = os.getenv("OPENAI_API_KEY")
