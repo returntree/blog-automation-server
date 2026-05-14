@@ -117,16 +117,7 @@ def format_paragraph_text(text: str) -> str:
 
 
 def build_intro_paragraph(title: str, request_data: dict[str, Any]) -> str:
-    topic = str(request_data.get("topic", "")).strip()
-    audience = str(request_data.get("audience", "")).strip()
-    subject = topic or title.strip() or "이번 주제"
-
-    intro = (
-        f"오늘은 {subject}에 대해 핵심만 쉽게 정리해보겠습니다. "
-        f"처음 내용을 찾는 분들도 흐름을 빠르게 이해할 수 있도록 중요한 포인트부터 차근차근 살펴보겠습니다. "
-        f"{audience + ' 분들께 ' if audience else '읽는 분들께 '}실제로 도움이 되는 기준과 체크포인트를 함께 전해드리겠습니다."
-    )
-    return format_paragraph_text(intro)
+    return ""
 
 
 def build_packaged_paragraphs(title: str, paragraphs: list[dict[str, Any]], request_data: dict[str, Any]) -> list[str]:
@@ -135,10 +126,7 @@ def build_packaged_paragraphs(title: str, paragraphs: list[dict[str, Any]], requ
         for paragraph in paragraphs
         if isinstance(paragraph, dict) and isinstance(paragraph.get("text"), str) and paragraph.get("text").strip()
     ]
-    intro_paragraph = build_intro_paragraph(title, request_data)
     packaged_paragraphs: list[str] = []
-    if intro_paragraph:
-        packaged_paragraphs.append(intro_paragraph)
     packaged_paragraphs.extend([paragraph for paragraph in cleaned_paragraphs if paragraph])
     return packaged_paragraphs
 
